@@ -3,6 +3,17 @@ https://osirissc2guide.com/starcraft-2-protoss-vs-protoss-strategy.html
 
 0: Get the build order, mine -> make workers -> Nexus, gateway, gas deposits, -> workers -> "stargate"
 
-1: Tell workers to gide in Nexus if attacked
+1: Tell workers to hide in Nexus if attacked
 
-2: 
+2: Tell army to attack approaching enemies
+
+3: Attack enemy army if we will win, wall back if we will loose
+
+4: ...
+
+
+Advanced tactics:
+1: teleport zealots behind enemy lines
+
+2: sheild battery to starship rush
+
