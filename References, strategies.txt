@@ -1,1 +1,8 @@
 https://osirissc2guide.com/starcraft-2-protoss-vs-protoss-strategy.html
+
+
+0: Get the build order, mine -> make workers -> Nexus, gateway, gas deposits, -> workers -> "stargate"
+
+1: Tell workers to gide in Nexus if attacked
+
+2: 
