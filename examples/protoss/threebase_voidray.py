@@ -124,7 +124,7 @@ class ThreebaseVoidrayBot(BotAI):
 
 def main():
     run_game(
-        maps.get("(2)CatalystLE"),
+        maps.get("BerlingradAIE"),
         [Bot(Race.Protoss, ThreebaseVoidrayBot()),
          Computer(Race.Protoss, Difficulty.Easy)],
         realtime=False,

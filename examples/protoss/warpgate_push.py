@@ -139,7 +139,7 @@ class WarpGateBot(BotAI):
 
 def main():
     run_game(
-        maps.get("(2)CatalystLE"),
+        maps.get("BerlingradAIE"),
         [Bot(Race.Protoss, WarpGateBot()), Computer(Race.Protoss, Difficulty.Easy)],
         realtime=False,
     )

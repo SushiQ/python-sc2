@@ -59,7 +59,7 @@ class FindAdeptShadesBot(BotAI):
 
 def main():
     run_game(
-        maps.get("(2)CatalystLE"),
+        maps.get("BerlingradAIE"),
         [Bot(Race.Protoss, FindAdeptShadesBot()),
          Computer(Race.Protoss, Difficulty.Medium)],
         realtime=False,
