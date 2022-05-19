@@ -7,6 +7,8 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.main import run_game
 from sc2.player import Bot, Computer
 
+import py_trees
+import random
 
 class FastBaseBot(BotAI):
 
@@ -37,14 +39,17 @@ class FastBaseBot(BotAI):
                     loop_nexus(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, nexus)
                     break
 
-        # If we are low on supply, build pylon
+        # If we are low on supply, build pylon near next nexus expansion site
         if (
             self.supply_left < 2 and self.already_pending(UnitTypeId.PYLON) == 0
             or self.supply_used > 15 and self.supply_left < 4 and self.already_pending(UnitTypeId.PYLON) < 2
         ):
             # Always check if you can afford something before you build it
             if self.can_afford(UnitTypeId.PYLON):
-                await self.build(UnitTypeId.PYLON, near=nexus)
+                location = await self.get_next_expansion()
+                position = await self.find_placement(UnitTypeId.PYLON, near=location)
+
+                await self.build(UnitTypeId.PYLON, near=position)
 
         # Train probe on nexuses that are undersaturated (avoiding distribute workers functions)
         # if nexus.assigned_harvesters < nexus.ideal_harvesters and nexus.is_idle:
@@ -57,12 +62,45 @@ class FastBaseBot(BotAI):
             if self.can_afford(UnitTypeId.NEXUS):
                 await self.expand_now()
 
-        
+        # Build gas
+        if self.townhalls.ready.amount + self.already_pending(UnitTypeId.NEXUS) > 1:
+            for nexus in self.townhalls.ready:
+                vgs = self.vespene_geyser.closer_than(15, nexus)
+                for vg in vgs:
+                    if not self.can_afford(UnitTypeId.ASSIMILATOR):
+                        break
+                    worker = self.select_build_worker(vg.position)
+                    if worker is None:
+                        break
+                    if not self.gas_buildings or not self.gas_buildings.closer_than(1, vg):
+                        worker.build_gas(vg)
+                        worker.stop(queue=True)
+
+        # Build GATEWAY and CYBERNETICSCORE when pylon is built
+        if self.structures(UnitTypeId.PYLON).ready + self.already_pending(UnitTypeId.NEXUS) > 1 + self.townhalls.ready.amount = :
+            proxy = self.structures(UnitTypeId.PYLON).closest_to(self.enemy_start_locations[0])
+            pylon = self.structures(UnitTypeId.PYLON).ready.random
+            if self.structures(UnitTypeId.GATEWAY).ready:
+                # If we have no cyber core, build one
+                if not self.structures(UnitTypeId.CYBERNETICSCORE):
+                    if (
+                        self.can_afford(UnitTypeId.CYBERNETICSCORE)
+                        and self.already_pending(UnitTypeId.CYBERNETICSCORE) == 0
+                    ):
+                        await self.build(UnitTypeId.CYBERNETICSCORE, near=pylon)
+            # Build up to 2 gates
+            if (
+                self.can_afford(UnitTypeId.GATEWAY)
+                and self.structures(UnitTypeId.WARPGATE).amount + self.structures(UnitTypeId.GATEWAY).amount < 2
+            ):
+                await self.build(UnitTypeId.GATEWAY, near=pylon)
+
+
 
 def main():
     run_game(
         maps.get("BerlingradAIE"),
-        [Bot(Race.Protoss, ThreebaseVoidrayBot()),
+        [Bot(Race.Protoss, FastBaseBot()),
          Computer(Race.Protoss, Difficulty.Easy)],
         realtime=False,
     )
