@@ -1,5 +1,6 @@
 https://osirissc2guide.com/starcraft-2-protoss-vs-protoss-strategy.html
 https://liquipedia.net/starcraft2/Category:Protoss_Build_Orders
+http://www.gameaipro.com/GameAIPro/GameAIPro_Chapter10_Building_Utility_Decisions_into_Your_Existing_Behavior_Tree.pdf
 
 
 0: Get the build order, mine -> make workers -> Nexus, gateway, gas deposits, -> workers -> "stargate"
