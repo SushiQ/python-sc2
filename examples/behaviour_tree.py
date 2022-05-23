@@ -1,26 +1,21 @@
 from datetime import datetime
 from abc import ABC, abstractmethod
+from enum import Enum, auto
 
 #get current date
 dt = datetime.today()
 seconds = round(dt.timestamp())
 print(seconds)
 
-BT = True
+evaluate_time = True
+
+
 
 
 class FastBaseBot():
-    clock.self = BTNode()
-
-    while BT:
-        clock.Evaluate()
-
-
-class BehaviorTree():
-
-        clockSequence = [ twoSecond, threeSecond]
-        clock = clockSequence
-
+    def __init__(self, clock):
+        clock = BTNode()
+        self.clock = clock
 
 class State(Enum):
     RUNNING = auto()
@@ -92,3 +87,18 @@ class Sequence(BTNode):
             _nodeState = State.SUCCESS
 
         return _nodeState
+
+
+
+class BehaviorTree():
+    checkTwoSecond = twoSecond()
+    checkThreeSecond = BTNode()
+    self.checkTwoSecond = checkTwoSecond
+
+
+
+    clockSequence = [ checkTwoSecond, checkThreeSecond]
+    clock = clockSequence
+
+    while evaluate_time():
+        self.clock.Evaluate()
