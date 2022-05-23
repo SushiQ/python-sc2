@@ -97,6 +97,8 @@ class FastBaseBot(BotAI):
 
 
 
+
+
 def main():
     run_game(
         maps.get("BerlingradAIE"),
