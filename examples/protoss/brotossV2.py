@@ -107,11 +107,12 @@ class Brotoss(BotAI):
                 for unit in self.units(UnitTypeId.STALKER):
                     self.scoutArmy.append(unit.tag)
                 self.scout_location = None
-            if(self.defensePhase):
+            elif(self.defensePhase):
                 army = self.units.filter(lambda unit: unit.type_id not in {UnitTypeId.PROBE})
                 for unit in army:
                     unit.attack(self.main_base_ramp.top_center)
             elif(self.scoutPhase):
+                cleared = True
                 if(self.scout_location == None):
                     self.scout_location = await self.get_next_expansion()
                     for el in self.expansion_locations_list:
@@ -131,24 +132,26 @@ class Brotoss(BotAI):
                             break
                 army = self.units.filter(lambda unit: unit.type_id not in {UnitTypeId.PROBE})
                 for unit in army:
-                    if(unit.distance_to(self.scout_location)>1 and unit.tag in self.scoutArmy):
+                    if(unit.distance_to(self.scout_location)>2 and unit.tag in self.scoutArmy):
                         unit.attack(self.scout_location)
-                    else:
-                        for el in self.expansion_locations_list:
-                            if(el.distance_to(self.scout_location) < 2):
-                                continue
-                            def is_near_to_expansion(t):
-                                return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
-                            if any(map(is_near_to_expansion, self.townhalls)):
-                                # already taken
-                                continue
-                            startp = self.game_info.player_start_location
-                            d = await self.client.query_pathing(startp, el)
-                            if d is None:
-                                continue
-                            if(nexus.distance_to(el)<100):
-                                self.scout_location = el
-                                break
+                        cleared = False
+                if(cleared):
+                    random.shuffle(self.expansion_locations_list)
+                    for el in self.expansion_locations_list:
+                        if(el.distance_to(self.scout_location) < 2):
+                            continue
+                        def is_near_to_expansion(t):
+                            return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
+                        if any(map(is_near_to_expansion, self.townhalls)):
+                            # already taken
+                            continue
+                        startp = self.game_info.player_start_location
+                        d = await self.client.query_pathing(startp, el)
+                        if d is None:
+                            continue
+                        if(nexus.distance_to(el)<75):
+                            self.scout_location = el
+                            break
                 army = self.units.filter(lambda unit: unit.type_id not in {UnitTypeId.PROBE})
                 for unit in army:
                     if(unit.tag not in self.scoutArmy):
@@ -320,8 +323,8 @@ class Brotoss(BotAI):
                                         if self.can_afford(UnitTypeId.ZEALOT):
                                             sg.train(UnitTypeId.ZEALOT)
                                 else:
-                                    #build 3rd pylon
-                                    if not self.structures(UnitTypeId.PYLON).amount > 2 and self.already_pending(UnitTypeId.PYLON) == 0:
+                                    #build 3rd pylon # currently not necessary
+                                    if not (self.structures(UnitTypeId.PYLON).amount > 2 and self.already_pending(UnitTypeId.PYLON) == 0) and 1 != 1:
                                         if self.can_afford(UnitTypeId.PYLON):
                                             await self.build(UnitTypeId.PYLON, near=nexus)
                                     else:
@@ -356,8 +359,8 @@ class Brotoss(BotAI):
                                                         if(self.already_pending(UnitTypeId.STALKER)==0):
                                                             await self.warp_new_units()
                                                     else:
-                                                        #4th Pylon
-                                                        if not self.structures(UnitTypeId.PYLON).amount > 3 and self.already_pending(UnitTypeId.PYLON) == 0:
+                                                        #4th Pylon # CURRENTLY SET TO 3rd pylon
+                                                        if not self.structures(UnitTypeId.PYLON).amount > 2 and self.already_pending(UnitTypeId.PYLON) == 0:
                                                             if self.can_afford(UnitTypeId.PYLON):
                                                                 await self.build(UnitTypeId.PYLON, near=pylon)
                                                         #TWO MORE STALKERS
@@ -376,6 +379,7 @@ class Brotoss(BotAI):
                                                             if(self.already_pending(UnitTypeId.STALKER)==0):
                                                                 await self.warp_new_units()
                                                         else:
+                                                            #DOES NOT REBUILD NEXUS FOR SOME REASON
                                                             if(self.structures(UnitTypeId.NEXUS).amount < 2 and self.already_pending(UnitTypeId.NEXUS) == 0):
                                                                 if self.can_afford(UnitTypeId.NEXUS):
                                                                     await self.expand_now()
@@ -398,6 +402,11 @@ class Brotoss(BotAI):
         if not self.structures(UnitTypeId.ROBOTICSFACILITY) and self.already_pending(UnitTypeId.ROBOTICSFACILITY)==0:
             if(self.can_afford(UnitTypeId.ROBOTICSFACILITY)):
                 await self.build(UnitTypeId.ROBOTICSFACILITY, near=pylon)
+        if self.units(UnitTypeId.IMMORTAL).amount>3 and self.units(UnitTypeId.OBSERVER).amount<2 and self.already_pending(UnitTypeId.OBSERVER)<1:
+            for sg in self.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
+                if self.can_afford(UnitTypeId.OBSERVER):
+                    sg.train(UnitTypeId.OBSERVER)
+
         #train Immortals
         if self.already_pending(UnitTypeId.IMMORTAL)<1:
             for sg in self.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
@@ -405,6 +414,7 @@ class Brotoss(BotAI):
                     sg.train(UnitTypeId.IMMORTAL)
         else:
             await self.warp_new_units()
+            
         
         # Build more gas near completed nexuses once we have a robofollowup going (does not need to be completed)
         for nexus in self.townhalls.ready:
@@ -663,7 +673,7 @@ def main():
         Computer(Race.Protoss, Difficulty.Hard)
         #Bot(Race.Protoss, TimingAttackBot())
          ],
-        realtime=False,
+        realtime=True,
     )
 
 if __name__ == "__main__":
