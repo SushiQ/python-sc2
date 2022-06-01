@@ -32,6 +32,8 @@ class Brotoss(BotAI):
         self.scoutPhase = False 
         self.attackPhase = False
         self.scoutArmy = []
+        self.colossus = False
+        self.scout_location = None
                 
     # pylint: disable=R0912
     async def on_step(self, iteration):     
@@ -54,6 +56,7 @@ class Brotoss(BotAI):
         if (
             self.supply_left < 2 and self.already_pending(UnitTypeId.PYLON) == 0
             or self.supply_used > 25 and self.supply_left < 4 and self.already_pending(UnitTypeId.PYLON) < 2
+            or self.supply_used > 70 and self.supply_left < 6 and self.already_pending(UnitTypeId.PYLON) < 2
         ):
             # Always check if you can afford something before you build it
             if self.can_afford(UnitTypeId.PYLON):
@@ -106,11 +109,48 @@ class Brotoss(BotAI):
                     self.scoutArmy.append(unit.tag)
                 for unit in self.units(UnitTypeId.STALKER):
                     self.scoutArmy.append(unit.tag)
-                self.scout_location = None
+                
             elif(self.defensePhase):
+                cleared = True
+                if(self.scout_location == None):
+                    self.scout_location = await self.get_next_expansion()
+                    for el in self.expansion_locations_list:
+                        if(el.distance_to(self.scout_location) < 2):
+                            continue
+                        def is_near_to_expansion(t):
+                            return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
+                        if any(map(is_near_to_expansion, self.townhalls)):
+                            # already taken
+                            continue
+                        startp = self.game_info.player_start_location
+                        d = await self.client.query_pathing(startp, el)
+                        if d is None:
+                            continue
+                        if(nexus.distance_to(el)<50):
+                            self.scout_location = el
+                            break
                 army = self.units.filter(lambda unit: unit.type_id not in {UnitTypeId.PROBE})
                 for unit in army:
-                    unit.attack(self.main_base_ramp.top_center)
+                    if(unit.distance_to(self.scout_location)>2 and unit.tag):
+                        unit.attack(self.scout_location)
+                        cleared = False
+                if(cleared):
+                    random.shuffle(self.expansion_locations_list)
+                    for el in self.expansion_locations_list:
+                        if(el.distance_to(self.scout_location) < 2):
+                            continue
+                        def is_near_to_expansion(t):
+                            return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
+                        if any(map(is_near_to_expansion, self.townhalls)):
+                            # already taken
+                            continue
+                        startp = self.game_info.player_start_location
+                        d = await self.client.query_pathing(startp, el)
+                        if d is None:
+                            continue
+                        if(nexus.distance_to(el)<75):
+                            self.scout_location = el
+                            break
             elif(self.scoutPhase):
                 cleared = True
                 if(self.scout_location == None):
@@ -183,7 +223,7 @@ class Brotoss(BotAI):
     async def VRRvoidrayRecruitment(self):
         #builds voidrays only if 3 nexuses are ready
         # Save up for expansions, loop over idle completed stargates and queue void ray if we can afford
-        if self.townhalls.amount >= 3:
+        if self.townhalls.amount >= 2:
             for sg in self.structures(UnitTypeId.STARGATE).ready.idle:
                 if self.can_afford(UnitTypeId.VOIDRAY):
                     sg.train(UnitTypeId.VOIDRAY)
@@ -299,7 +339,7 @@ class Brotoss(BotAI):
                         #build 2nd pylon
                         if self.structures(UnitTypeId.PYLON).amount < 2 and self.already_pending(UnitTypeId.PYLON) == 0:
                             if self.can_afford(UnitTypeId.PYLON):
-                                await self.build(UnitTypeId.PYLON, near=nexus)
+                                await self.build(UnitTypeId.PYLON, self.main_base_ramp.protoss_wall_pylon)
                         else:
                             #begin gas production
                             if(self.structures(UnitTypeId.ASSIMILATOR).amount+self.already_pending(UnitTypeId.ASSIMILATOR) < 2):
@@ -367,7 +407,7 @@ class Brotoss(BotAI):
                                                         if(self.units(UnitTypeId.STALKER).amount + self.already_pending(UnitTypeId.STALKER)<3):
                                                             for sg in self.structures(UnitTypeId.GATEWAY).ready.idle:
                                                                 if self.can_afford(UnitTypeId.STALKER):
-                                                                    if not nexus.is_idle and not nexus.has_buff(BuffId.CHRONOBOOSTENERGYCOST) and self.spentChronos<3:
+                                                                    if not nexus.is_idle and not nexus.has_buff(BuffId.CHRONOBOOSTENERGYCOST) and self.spentChronos<4:
                                                                         nexuses = self.structures(UnitTypeId.NEXUS)
                                                                         abilities = await self.get_available_abilities(nexuses)
                                                                         for loop_nexus, abilities_nexus in zip(nexuses, abilities):
@@ -406,16 +446,57 @@ class Brotoss(BotAI):
             for sg in self.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
                 if self.can_afford(UnitTypeId.OBSERVER):
                     sg.train(UnitTypeId.OBSERVER)
-
         #train Immortals
-        if self.already_pending(UnitTypeId.IMMORTAL)<1:
+        if self.already_pending(UnitTypeId.IMMORTAL)<1 and not self.colossus:
             for sg in self.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
                 if self.can_afford(UnitTypeId.IMMORTAL):
                     sg.train(UnitTypeId.IMMORTAL)
+        #Complement them with stalkers
+        elif(self.units(UnitTypeId.STALKER).amount < 8):
+            for sg in self.structures(UnitTypeId.GATEWAY).ready.idle:
+                if self.can_afford(UnitTypeId.STALKER):
+                    sg.train(UnitTypeId.STALKER)
+            if(self.already_pending(UnitTypeId.STALKER)==0):
+                await self.warp_new_units()
+        #If army production is going well look into upgrades
         else:
-            await self.warp_new_units()
+            #build forge
+            if not self.structures(UnitTypeId.FORGE) and self.already_pending(UnitTypeId.FORGE)==0:
+                if(self.can_afford(UnitTypeId.FORGE)):
+                    await self.build(UnitTypeId.FORGE, near=pylon) 
+            #Research upgrades
+            if (self.can_afford(UpgradeId.PROTOSSSHIELDSLEVEL1)
+                and self.already_pending_upgrade(UpgradeId.PROTOSSSHIELDSLEVEL1) == 0):
+                if self.structures(UnitTypeId.FORGE).ready:
+                    #We research shield upgrade1 ! 
+                    ccore = self.structures(UnitTypeId.FORGE).ready.first
+                    ccore.research(UpgradeId.PROTOSSSHIELDSLEVEL1) 
+            #build a robotics bay
+            if not self.structures(UnitTypeId.ROBOTICSBAY) and self.already_pending(UnitTypeId.ROBOTICSBAY)==0:
+                if(self.can_afford(UnitTypeId.ROBOTICSBAY)):
+                    await self.build(UnitTypeId.ROBOTICSBAY, near=pylon)    
+            #train colossus
+            if(self.structures(UnitTypeId.ROBOTICSBAY) and self.units(UnitTypeId.COLOSSUS).amount <1):
+                self.colossus = True
+            else:
+                self.colossus = False
+            if self.already_pending(UnitTypeId.IMMORTAL)==1:
+                #Builds 3 stargates for the voidRayRush - requires warpgate,cyberneticscore and gas
+                await self.VRRstargateConstruction(2,3)
+                #builds voidrays only if 3 nexuses are ready
+                await self.VRRvoidrayRecruitment()
+        if(self.colossus):
+            for sg in self.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
+                if self.can_afford(UnitTypeId.COLOSSUS) and self.already_pending(UnitTypeId.COLOSSUS)<1:
+                    sg.train(UnitTypeId.COLOSSUS)
+        
+        if(self.minerals > 800 and (self.structures(UnitTypeId.NEXUS).amount < 3 or self.units(UnitTypeId.PROBE).idle.amount > 10) ):
+            if self.townhalls.ready.amount + self.already_pending(UnitTypeId.NEXUS) < 3 :
+                if self.can_afford(UnitTypeId.NEXUS):
+                    await self.expand_now()
             
         
+
         # Build more gas near completed nexuses once we have a robofollowup going (does not need to be completed)
         for nexus in self.townhalls.ready:
             vgs = self.vespene_geyser.closer_than(15, nexus)
@@ -431,7 +512,7 @@ class Brotoss(BotAI):
                     worker.build_gas(vg)
                     worker.stop(queue=True)
         
-        if(self.units(UnitTypeId.IMMORTAL).amount > 8 and self.units(UnitTypeId.STALKER).amount >4):
+        if(self.units(UnitTypeId.IMMORTAL).amount > 5 and self.units(UnitTypeId.STALKER).amount >4):
             self.attackPhase = True
             self.scoutPhase = False
             self.defensePhase = False
@@ -451,6 +532,22 @@ class Brotoss(BotAI):
                     immortal.attack(target)
                 else:
                     immortal.attack(self.enemy_start_locations[0])
+            for colossus in self.units(UnitTypeId.COLOSSUS):
+            # Choose target and attack, filter out invisible targets
+                targets = (self.enemy_units | self.enemy_structures).filter(lambda unit: unit.can_be_attacked)
+                if targets:
+                    target = targets.closest_to(colossus)
+                    colossus.attack(target)
+                else:
+                    colossus.attack(self.enemy_start_locations[0])
+            for vr in self.units(UnitTypeId.VOIDRAY):
+            # Choose target and attack, filter out invisible targets
+                targets = (self.enemy_units | self.enemy_structures).filter(lambda unit: unit.can_be_attacked)
+                if targets:
+                    target = targets.closest_to(vr)
+                    vr.attack(target)
+                else:
+                    vr.attack(self.enemy_start_locations[0])
         elif(self.units(UnitTypeId.IMMORTAL).amount <4 or self.units(UnitTypeId.STALKER).amount <4):
             self.attackPhase = False
             self.scoutPhase = True
@@ -673,7 +770,7 @@ def main():
         Computer(Race.Protoss, Difficulty.Hard)
         #Bot(Race.Protoss, TimingAttackBot())
          ],
-        realtime=True,
+        realtime=False,
     )
 
 if __name__ == "__main__":
