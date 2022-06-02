@@ -13,6 +13,9 @@ from loguru import logger
 from threebase_voidray import ThreebaseVoidrayBot
 from cannon_rush import CannonRushBot
 from g21 import TimingAttackBot
+from g16 import StalkerCheeseBot
+from g20 import SimpleBot
+from GArni import MyBot
 
 class Brotoss(BotAI):
     scouting_workers = []
@@ -34,6 +37,8 @@ class Brotoss(BotAI):
         self.scoutArmy = []
         self.colossus = False
         self.scout_location = None
+        self.scout_locations = []
+        self.scout_index = 0
                 
     # pylint: disable=R0912
     async def on_step(self, iteration):     
@@ -48,6 +53,25 @@ class Brotoss(BotAI):
                 worker.attack(self.enemy_start_locations[0])
             return
         nexus = self.townhalls.ready.random
+
+        if(self.scout_location == None or self.cleared):
+            self.scout_locations = []
+            for el in self.expansion_locations_list:
+                def is_near_to_expansion(t):
+                    return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
+                if any(map(is_near_to_expansion, self.townhalls)):
+                    # already taken
+                    continue
+                startp = self.game_info.player_start_location
+                d = await self.client.query_pathing(startp, el)
+                if d is None:
+                    continue
+                if(nexus.distance_to(el)<75):
+                    self.scout_locations.append(el)
+            if(self.scout_index > len(self.scout_locations)-1 ):
+                self.scout_index = 0
+            self.scout_location = self.scout_locations[self.scout_index]
+            self.scout_index +=1
 
         # Distribute workers in gas and across bases
         await self.distribute_workers()
@@ -102,7 +126,7 @@ class Brotoss(BotAI):
             await self.VRR()
         elif(self.strategy == "2GateExpand"):
             await self.buildorder2WarpgateExpand()
-            if(self.defensePhase and self.units(UnitTypeId.ZEALOT).amount == 2 and self.units(UnitTypeId.STALKER).amount == 1):
+            if(self.defensePhase and self.units(UnitTypeId.ZEALOT).amount >= 2 and self.units(UnitTypeId.STALKER).amount >= 1):
                 self.scoutPhase = True
                 self.defensePhase = False
                 for unit in self.units(UnitTypeId.ZEALOT):
@@ -111,91 +135,25 @@ class Brotoss(BotAI):
                     self.scoutArmy.append(unit.tag)
                 
             elif(self.defensePhase):
-                cleared = True
-                if(self.scout_location == None):
-                    self.scout_location = await self.get_next_expansion()
-                    for el in self.expansion_locations_list:
-                        if(el.distance_to(self.scout_location) < 2):
-                            continue
-                        def is_near_to_expansion(t):
-                            return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
-                        if any(map(is_near_to_expansion, self.townhalls)):
-                            # already taken
-                            continue
-                        startp = self.game_info.player_start_location
-                        d = await self.client.query_pathing(startp, el)
-                        if d is None:
-                            continue
-                        if(nexus.distance_to(el)<50):
-                            self.scout_location = el
-                            break
+                self.cleared = True
                 army = self.units.filter(lambda unit: unit.type_id not in {UnitTypeId.PROBE})
                 for unit in army:
                     if(unit.distance_to(self.scout_location)>2 and unit.tag):
                         unit.attack(self.scout_location)
-                        cleared = False
-                if(cleared):
-                    random.shuffle(self.expansion_locations_list)
-                    for el in self.expansion_locations_list:
-                        if(el.distance_to(self.scout_location) < 2):
-                            continue
-                        def is_near_to_expansion(t):
-                            return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
-                        if any(map(is_near_to_expansion, self.townhalls)):
-                            # already taken
-                            continue
-                        startp = self.game_info.player_start_location
-                        d = await self.client.query_pathing(startp, el)
-                        if d is None:
-                            continue
-                        if(nexus.distance_to(el)<75):
-                            self.scout_location = el
-                            break
+                        self.cleared = False
+                
             elif(self.scoutPhase):
-                cleared = True
-                if(self.scout_location == None):
-                    self.scout_location = await self.get_next_expansion()
-                    for el in self.expansion_locations_list:
-                        if(el.distance_to(self.scout_location) < 2):
-                            continue
-                        def is_near_to_expansion(t):
-                            return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
-                        if any(map(is_near_to_expansion, self.townhalls)):
-                            # already taken
-                            continue
-                        startp = self.game_info.player_start_location
-                        d = await self.client.query_pathing(startp, el)
-                        if d is None:
-                            continue
-                        if(nexus.distance_to(el)<50):
-                            self.scout_location = el
-                            break
+                self.cleared = True
                 army = self.units.filter(lambda unit: unit.type_id not in {UnitTypeId.PROBE})
                 for unit in army:
                     if(unit.distance_to(self.scout_location)>2 and unit.tag in self.scoutArmy):
                         unit.attack(self.scout_location)
-                        cleared = False
-                if(cleared):
-                    random.shuffle(self.expansion_locations_list)
-                    for el in self.expansion_locations_list:
-                        if(el.distance_to(self.scout_location) < 2):
-                            continue
-                        def is_near_to_expansion(t):
-                            return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
-                        if any(map(is_near_to_expansion, self.townhalls)):
-                            # already taken
-                            continue
-                        startp = self.game_info.player_start_location
-                        d = await self.client.query_pathing(startp, el)
-                        if d is None:
-                            continue
-                        if(nexus.distance_to(el)<75):
-                            self.scout_location = el
-                            break
+                        self.cleared = False
                 army = self.units.filter(lambda unit: unit.type_id not in {UnitTypeId.PROBE})
                 for unit in army:
                     if(unit.tag not in self.scoutArmy):
-                        unit.attack(self.main_base_ramp.top_center)
+                        if(unit.distance_to(self.main_base_ramp.top_center)>5 or self.get_terrain_height(unit.position)< self.get_terrain_height(self.main_base_ramp.top_center)):
+                            unit.attack(self.main_base_ramp.top_center)
             if(self.TwoGateExpandFinished):
                 await self.roboFollowUP()
         if not (
@@ -490,8 +448,18 @@ class Brotoss(BotAI):
                 if self.can_afford(UnitTypeId.COLOSSUS) and self.already_pending(UnitTypeId.COLOSSUS)<1:
                     sg.train(UnitTypeId.COLOSSUS)
         
-        if(self.minerals > 800 and (self.structures(UnitTypeId.NEXUS).amount < 3 or self.units(UnitTypeId.PROBE).idle.amount > 10) ):
-            if self.townhalls.ready.amount + self.already_pending(UnitTypeId.NEXUS) < 3 :
+        if(self.structures(UnitTypeId.ROBOTICSFACILITY).amount < 3):
+            if self.already_pending(UnitTypeId.ROBOTICSFACILITY) < 1 :
+                if self.can_afford(UnitTypeId.ROBOTICSFACILITY):
+                    await self.build(UnitTypeId.ROBOTICSFACILITY, near=pylon)
+        else:
+            if(self.structures(UnitTypeId.WARPGATE).amount+self.structures(UnitTypeId.GATEWAY).amount < 4):
+                if self.already_pending(UnitTypeId.GATEWAY) < 1 :
+                    if self.can_afford(UnitTypeId.GATEWAY):
+                        await self.build(UnitTypeId.GATEWAY, near=pylon)
+        
+        if(self.minerals > 600 and (self.structures(UnitTypeId.NEXUS).amount < 3 or self.units(UnitTypeId.PROBE).idle.amount > 10 or self.minerals > 1500 or self.structures(UnitTypeId.NEXUS).amount < 2) ):
+            if self.already_pending(UnitTypeId.NEXUS) < 1 :
                 if self.can_afford(UnitTypeId.NEXUS):
                     await self.expand_now()
             
@@ -767,8 +735,8 @@ def main():
         maps.get("BerlingradAIE"),
         [
         Bot(Race.Protoss, Brotoss()),
-        Computer(Race.Protoss, Difficulty.Hard)
-        #Bot(Race.Protoss, TimingAttackBot())
+        #Computer(Race.Protoss, Difficulty.VeryHard)
+        Bot(Race.Protoss, MyBot())
          ],
         realtime=False,
     )
